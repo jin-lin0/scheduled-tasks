@@ -1,0 +1,15 @@
+# ── Python 缓存 ──
+__pycache__/
+*.pyc
+*.pyo
+
+# ── 运行日志（含本机绝对路径，勿入库）──
+*.log
+run_all.log
+
+# ── 本机生成的 .app（macOS 登录项包装，路径因机而异）
+#    由 make_app.sh 在本地生成，不写死用户名，故不入库 ──
+ScheduledTasks.app/
+
+# ── macOS 杂项 ──
+.DS_Store
