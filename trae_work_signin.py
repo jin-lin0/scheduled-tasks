@@ -343,15 +343,35 @@ def cmd_signin():
     enable = st.get("enable")
     print(f"[{now_str()}] 状态: checked_in={checked_in} 今日积分={credits} enable={enable} (http {code})")
 
-    # 2) 领取
+    # 2) 领取（服务端限流 9074/频繁/太多 → 等待重试，最多 3 轮）
     if checked_in:
         print(f"[{now_str()}] 今日已签到，跳过")
     elif enable is False:
         print(f"[{now_str()}] 签到未开启(enable=false)，跳过")
     else:
-        r, cc = http_post(UG_HOST + EP_CHECKIN_CLAIM, {}, h)
-        msg = r.get("message") or r.get("msg") or json.dumps(r, ensure_ascii=False)
-        print(f"[{now_str()}] 签到结果: {msg} (http {cc})")
+        claim_ok = False
+        for attempt in range(1, 4):
+            r, cc = http_post(UG_HOST + EP_CHECKIN_CLAIM, {}, h)
+            msg = r.get("message") or r.get("msg") or json.dumps(r, ensure_ascii=False)
+            code = r.get("code")
+            print(f"[{now_str()}] 签到结果(第{attempt}次): {msg} (http {cc}, code={code})")
+            # 成功：code=0 或返回的 message 为 success / 已签到
+            if code == 0 or msg == "success" or "已签到" in str(msg):
+                claim_ok = True
+                break
+            # 限流类：9074 参与用户太多 / 操作太过频繁 / 稍后再试 → 等待后重试
+            is_rate = (
+                code == 9074
+                or any(k in str(msg) for k in ("频繁", "太多", "稍后再试", "高峰期", "重试"))
+            )
+            if is_rate and attempt < 3:
+                wait = 60 * attempt  # 60s / 120s
+                print(f"[{now_str()}] 命中服务端限流，{wait}s 后重试…", flush=True)
+                time.sleep(wait)
+                continue
+            break
+        if not claim_ok:
+            print(f"[{now_str()}] 今日 TRAE 签到未成功（服务端限流），将由下次定时触发自动补签", flush=True)
 
     # 3) 查总积分
     try:
